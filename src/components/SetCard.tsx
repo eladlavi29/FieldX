@@ -17,17 +17,32 @@ export default function SetCard({ set, onUpdateCadet, onEdit, onDelete, isSummar
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null)
   const [selectedTeam, setSelectedTeam] = useState<string | null>(null)
 
-  const stats = useMemo(() => {
-    const getStats = (cadets: Cadet[]) => {
-      const qualified = cadets.filter(c => 
-        c.history.find(h => h.setId === set.id)?.qualification === 'qualified'
-      ).length
-      const total = cadets.length
-      const percent = total > 0 ? Math.round((qualified / total) * 100) : 0
-      return { qualified, total, percent }
+  const getStats = (cadets: Cadet[]) => {
+    const qualified = cadets.filter(c => 
+      c.history.find(h => h.setId === set.id)?.qualification === 'qualified'
+    ).length
+    const total = cadets.length
+    const percent = total > 0 ? Math.round((qualified / total) * 100) : 0
+    return { qualified, total, percent }
+  }
+
+  const statsCadets = useMemo(() => {
+    if (selectedTeam && selectedCompany) {
+      return set.cadets.filter(c => c.company === selectedCompany && c.team === selectedTeam)
     }
-    return { getStats }
-  }, [set.id])
+    if (selectedCompany) {
+      return set.cadets.filter(c => c.company === selectedCompany)
+    }
+    return set.cadets
+  }, [set.cadets, selectedCompany, selectedTeam])
+
+  const currentStats = getStats(statsCadets)
+
+  const progressLabel = useMemo(() => {
+    if (selectedTeam && selectedCompany) return `התקדמות צוות ${selectedTeam}`
+    if (selectedCompany) return `התקדמות ${selectedCompany}`
+    return 'התקדמות מקצה כוללת'
+  }, [selectedCompany, selectedTeam])
 
   const companies = useMemo(() => {
     const unique = Array.from(new Set(set.cadets.map(c => c.company))).sort()
@@ -51,8 +66,6 @@ export default function SetCard({ set, onUpdateCadet, onEdit, onDelete, isSummar
     if (!selectedCompany || !selectedTeam) return []
     return set.cadets.filter(c => c.company === selectedCompany && c.team === selectedTeam)
   }, [set.cadets, selectedCompany, selectedTeam])
-
-  const setProgress = stats.getStats(set.cadets).percent
 
   return (
     <div 
@@ -81,11 +94,11 @@ export default function SetCard({ set, onUpdateCadet, onEdit, onDelete, isSummar
 
       <div className="progress-container" style={{ marginBottom: '1.5rem', padding: '0 1.5rem' }}>
         <div className="progress-label">
-          <span>התקדמות מקצה כוללת</span>
-          <span>{setProgress}%</span>
+          <span>{progressLabel}</span>
+          <span>{currentStats.qualified}/{currentStats.total}</span>
         </div>
         <div className="progress-bar-bg">
-          <div className="progress-bar-fill" style={{ width: `${setProgress}%` }}></div>
+          <div className="progress-bar-fill" style={{ width: currentStats.total > 0 ? `${(currentStats.qualified / currentStats.total) * 100}%` : '0%' }}></div>
         </div>
       </div>
 
@@ -96,7 +109,7 @@ export default function SetCard({ set, onUpdateCadet, onEdit, onDelete, isSummar
         {view === 'companies' && set.cadets.length > 0 && (
           <div className="drill-grid">
             {companies.map(comp => {
-              const compStats = stats.getStats(comp.cadets)
+              const compStats = getStats(comp.cadets)
               return (
                 <div key={comp.name} className="drill-card" onClick={() => {
                   setSelectedCompany(comp.name)
@@ -106,7 +119,7 @@ export default function SetCard({ set, onUpdateCadet, onEdit, onDelete, isSummar
                   <div className="drill-meta">{comp.cadets.length} צוערים</div>
                   <div className="progress-container">
                     <div className="progress-bar-bg" style={{ height: '0.5rem' }}>
-                      <div className="progress-bar-fill" style={{ width: `${compStats.percent}%` }}></div>
+                      <div className="progress-bar-fill" style={{ width: compStats.total > 0 ? `${(compStats.qualified / compStats.total) * 100}%` : '0%' }}></div>
                     </div>
                   </div>
                   <div className="drill-stats">{compStats.percent}% הוכשרו</div>
@@ -128,7 +141,7 @@ export default function SetCard({ set, onUpdateCadet, onEdit, onDelete, isSummar
             </div>
             <div className="drill-grid">
               {teams.map(team => {
-                const teamStats = stats.getStats(team.cadets)
+                const teamStats = getStats(team.cadets)
                 return (
                   <div key={team.name} className="drill-card" onClick={() => {
                     setSelectedTeam(team.name)
@@ -138,7 +151,7 @@ export default function SetCard({ set, onUpdateCadet, onEdit, onDelete, isSummar
                     <div className="drill-meta">{team.cadets.length} צוערים</div>
                     <div className="progress-container">
                       <div className="progress-bar-bg" style={{ height: '0.5rem' }}>
-                        <div className="progress-bar-fill" style={{ width: `${teamStats.percent}%` }}></div>
+                        <div className="progress-bar-fill" style={{ width: teamStats.total > 0 ? `${(teamStats.qualified / teamStats.total) * 100}%` : '0%' }}></div>
                       </div>
                     </div>
                     <div className="drill-stats">{teamStats.percent}% הוכשרו</div>

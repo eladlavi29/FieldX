@@ -12,7 +12,7 @@ const DEFAULT_TEMPLATES: TemplateDef[] = [
   { id: 'zeroing', name: 'מטווח איפוס', minHits: 5, maxGroupSize: 5 },
   { id: 'achievement', name: 'מקבץ הישגי', minHits: 3, minScore: 35 },
   { id: 'squad_drill', name: 'פרט חולייה', checklistItems: ['יבש', 'רטוב'] },
-  { id: 'range_management', name: 'ניהול מטווח', checklistItems: ['תדריך', 'תדרוך ירי'] }
+  { id: 'range_management', name: 'ניהול מטווח' }
 ]
 
 const DEFAULT_SLOT_TEMPLATES: SlotTemplateDef[] = [

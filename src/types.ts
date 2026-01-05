@@ -20,6 +20,7 @@ export interface HistoryRecord {
   checklist?: Record<string, boolean>
   qualification: QualificationStatus
   failures?: number
+  customData?: Record<string, number | boolean>
   timestamp: number
 }
 
@@ -39,6 +40,14 @@ export interface TemplateDef {
   minHits?: number
   maxGroupSize?: number
   minScore?: number
+}
+
+export interface CustomFieldDef {
+  id: string
+  name: string
+  type: 'checkbox' | 'number'
+  min?: number
+  max?: number
 }
 
 export interface SlotTemplateDef {

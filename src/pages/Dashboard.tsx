@@ -11,6 +11,7 @@ export default function Dashboard() {
   const [battalions, setBattalions] = useState<Battalion[]>([])
   const [now, setNow] = useState(new Date())
   const [isAddSlotModalOpen, setIsAddSlotModalOpen] = useState(false)
+  const [isCreatingSlot, setIsCreatingSlot] = useState(false)
 
   useEffect(() => {
     externalService.getAllBattalions().then(data => {
@@ -26,21 +27,28 @@ export default function Dashboard() {
   }
 
   // Calculate progress for a slot
-  function getSlotProgress(slotId: string) {
+  function getSlotStats(slotId: string) {
     const slotSets = sets.filter(s => s.slotId === slotId)
-    if (slotSets.length === 0) return 0
+    let qualified = 0
+    let total = 0
     
-    // Calculate average progress of all sets (treating each set as an equal unit)
-    const totalSetProgress = slotSets.reduce((acc, set) => acc + getSetProgress(set), 0)
-    return Math.round(totalSetProgress / slotSets.length)
+    slotSets.forEach(set => {
+      const stats = getSetStats(set)
+      qualified += stats.qualified
+      total += stats.total
+    })
+    
+    const percent = total > 0 ? Math.round((qualified / total) * 100) : 0
+    return { qualified, total, percent }
   }
 
-  function getSetProgress(set: SetItem) {
-    if (set.cadets.length === 0) return 0
+  function getSetStats(set: SetItem) {
+    const total = set.cadets.length
     const qualified = set.cadets.filter(c => 
       c.history.find(h => h.setId === set.id)?.qualification === 'qualified'
     ).length
-    return Math.round((qualified / set.cadets.length) * 100)
+    const percent = total > 0 ? Math.round((qualified / total) * 100) : 0
+    return { qualified, total, percent }
   }
 
   function getSlotStatus(slot: Slot) {
@@ -62,6 +70,8 @@ export default function Dashboard() {
   }
 
   async function handleAddSlot(slotData: any) {
+    setIsCreatingSlot(true)
+    try {
     const newSlot: Slot = { 
       id: String(Date.now()), 
       name: slotData.name.trim(),
@@ -134,6 +144,11 @@ export default function Dashboard() {
     }
 
     setIsAddSlotModalOpen(false)
+    } catch (error) {
+      console.error("Error creating slot:", error)
+    } finally {
+      setIsCreatingSlot(false)
+    }
   }
 
   function deleteSlot(e: React.MouseEvent, id: string) {
@@ -175,6 +190,7 @@ export default function Dashboard() {
         {slots.map(s => {
           const status = getSlotStatus(s)
           const slotSets = sets.filter(set => set.slotId === s.id)
+          const slotStats = getSlotStats(s.id)
           return (
             <Link key={s.id} to={`/slots/${s.id}`} className="slot-card">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -197,34 +213,37 @@ export default function Dashboard() {
               <div className="progress-container">
                 <div className="progress-label">
                   <span>התקדמות הכשרה כללית</span>
-                  <span>{getSlotProgress(s.id)}%</span>
+                  <span>{slotStats.qualified}/{slotStats.total}</span>
                 </div>
                 <div className="progress-bar-bg">
                   <div 
                     className="progress-bar-fill" 
-                    style={{ width: `${getSlotProgress(s.id)}%` }}
+                    style={{ width: slotStats.total > 0 ? `${(slotStats.qualified / slotStats.total) * 100}%` : '0%' }}
                   ></div>
                 </div>
               </div>
 
               {slotSets.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
-                  {slotSets.map(set => (
-                    <div key={set.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', fontSize: '0.85rem' }}>
-                      <div style={{ width: '120px', flexShrink: 0, color: 'var(--text-secondary)' }}>{set.name}</div>
-                      <div style={{ flex: 1, height: '6px', background: 'var(--bg-app)', borderRadius: '99px', overflow: 'hidden' }}>
-                        <div 
-                          style={{ 
-                            width: `${getSetProgress(set)}%`, 
-                            height: '100%', 
-                            background: 'var(--primary)',
-                            opacity: 0.8 
-                          }}
-                        ></div>
+                  {slotSets.map(set => {
+                    const setStats = getSetStats(set)
+                    return (
+                      <div key={set.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', fontSize: '0.85rem' }}>
+                        <div style={{ width: '120px', flexShrink: 0, color: 'var(--text-secondary)' }}>{set.name}</div>
+                        <div style={{ flex: 1, height: '6px', background: 'var(--bg-app)', borderRadius: '99px', overflow: 'hidden' }}>
+                          <div 
+                            style={{ 
+                              width: setStats.total > 0 ? `${(setStats.qualified / setStats.total) * 100}%` : '0%', 
+                              height: '100%', 
+                              background: 'var(--primary)',
+                              opacity: 0.8 
+                            }}
+                          ></div>
+                        </div>
+                        <div style={{ width: '40px', textAlign: 'left', fontSize: '0.75rem' }}>{setStats.qualified}/{setStats.total}</div>
                       </div>
-                      <div style={{ width: '30px', textAlign: 'left', fontSize: '0.75rem' }}>{getSetProgress(set)}%</div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
 
@@ -250,6 +269,13 @@ export default function Dashboard() {
           onClose={() => setIsAddSlotModalOpen(false)} 
           onAdd={handleAddSlot} 
         />
+      )}
+
+      {isCreatingSlot && (
+        <div className="modal-overlay" style={{ zIndex: 200 }}>
+          <div className="spinner"></div>
+          <div style={{ color: 'white', marginTop: '1rem', fontWeight: 'bold' }}>יוצר משבצת...</div>
+        </div>
       )}
     </div>
   )

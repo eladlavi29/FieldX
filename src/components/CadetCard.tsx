@@ -17,6 +17,7 @@ export default function CadetCard({ cadet, setId, setName, requirements, onUpdat
   const [score, setScore] = useState(currentRecord?.score ?? 0)
   const [checklist, setChecklist] = useState<Record<string, boolean>>(currentRecord?.checklist ?? {})
   const [failures, setFailures] = useState(currentRecord?.failures ?? 0)
+  const [customData, setCustomData] = useState<Record<string, any>>(currentRecord?.customData ?? {})
   
   const [qualification, setQualification] = useState<QualificationStatus>(
     currentRecord?.qualification ?? 'pending'
@@ -65,10 +66,30 @@ export default function CadetCard({ cadet, setId, setName, requirements, onUpdat
       }
     }
 
+    // Check Custom Fields
+    if (requirements.customFields) {
+      for (const field of requirements.customFields) {
+        const val = customData[field.id]
+        if (field.type === 'checkbox') {
+          // For checkbox requirement, usually means it must be checked
+          if (val !== true) { isQualified = false; }
+          if (val === true) hasData = true
+        } else if (field.type === 'number') {
+          const numVal = typeof val === 'number' ? val : 0
+          if (field.min !== undefined && numVal < field.min) isQualified = false
+          if (field.max !== undefined && numVal > field.max) isQualified = false
+          // Assume if there's a min/max requirement, we need data.
+          // If value is 0 and min is 0, it might be valid, but let's assume user interacts.
+          // For simplicity, if customData has the key, we consider it hasData.
+          if (customData.hasOwnProperty(field.id)) hasData = true
+        }
+      }
+    }
+
     if (hasData) {
       setQualification(isQualified ? 'qualified' : 'pending')
     }
-  }, [hits, groupSize, score, checklist, requirements])
+  }, [hits, groupSize, score, checklist, customData, requirements])
 
   // Save whenever data changes
   useEffect(() => {
@@ -84,6 +105,7 @@ export default function CadetCard({ cadet, setId, setName, requirements, onUpdat
       checklist,
       qualification,
       failures,
+      customData,
       timestamp: existingIdx >= 0 ? updated.history[existingIdx].timestamp : Date.now(),
     }
 
@@ -96,7 +118,7 @@ export default function CadetCard({ cadet, setId, setName, requirements, onUpdat
     }
 
     onUpdate(updated)
-  }, [hits, groupSize, score, checklist, qualification, failures])
+  }, [hits, groupSize, score, checklist, qualification, failures, customData])
 
   function toggleChecklist(key: string) {
     setChecklist(prev => ({ ...prev, [key]: !prev[key] }))
@@ -137,30 +159,25 @@ export default function CadetCard({ cadet, setId, setName, requirements, onUpdat
         </div>
         
         {/* Dynamic Columns based on Template */}
-        {(requirements?.template === 'zeroing' || requirements?.template === 'custom') && (
-          <>
+        {requirements?.minHits !== undefined && (
             <div className="cadet-data-cell">
               <span className="label">פגיעות</span>
               {renderCounter(hits, setHits)}
             </div>
+        )}
+
+        {requirements?.maxGroupSize !== undefined && (
             <div className="cadet-data-cell">
               <span className="label">מקבץ (ס"מ)</span>
               {renderCounter(groupSize, setGroupSize, 0.5)}
             </div>
-          </>
         )}
 
-        {requirements?.template === 'achievement' && (
-          <>
+        {requirements?.minScore !== undefined && (
             <div className="cadet-data-cell">
               <span className="label">ניקוד</span>
               {renderCounter(score, setScore, 1)}
             </div>
-            <div className="cadet-data-cell">
-              <span className="label">פגיעות</span>
-              {renderCounter(hits, setHits)}
-            </div>
-          </>
         )}
 
         {requirements?.checklistItems && requirements.checklistItems.length > 0 && (
@@ -182,10 +199,33 @@ export default function CadetCard({ cadet, setId, setName, requirements, onUpdat
           </div>
         )}
 
-        <div className="cadet-data-cell">
-          <span className="label">נכשלים</span>
-          {renderCounter(failures, setFailures)}
-        </div>
+        {requirements?.customFields && requirements.customFields.map(field => (
+          <div key={field.id} className="cadet-data-cell">
+            <span className="label">{field.name}</span>
+            {field.type === 'number' ? (
+              renderCounter(
+                typeof customData[field.id] === 'number' ? customData[field.id] : 0,
+                (val) => {
+                  const newVal = typeof val === 'function' ? val(typeof customData[field.id] === 'number' ? customData[field.id] : 0) : val
+                  setCustomData(prev => ({ ...prev, [field.id]: newVal }))
+                }
+              )
+            ) : (
+              <label className="custom-checkbox">
+                <input type="checkbox" checked={customData[field.id] === true} onChange={() => setCustomData(prev => ({ ...prev, [field.id]: !prev[field.id] }))} />
+                <span className="checkmark"></span>
+                {customData[field.id] ? 'עבר' : 'לא עבר'}
+              </label>
+            )}
+          </div>
+        ))}
+
+        {requirements?.template !== 'custom' && (
+          <div className="cadet-data-cell">
+            <span className="label">נכשלים</span>
+            {renderCounter(failures, setFailures)}
+          </div>
+        )}
 
         {/* Status Column - Always visible and clickable */}
         <div className="cadet-data-cell">

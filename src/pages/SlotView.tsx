@@ -15,6 +15,14 @@ export default function SlotView() {
   const [battalionId, setBattalionId] = useState('')
   const [allSets, setAllSets] = useState<SetItem[]>(storage.getSets())
   
+  function getSetStats(set: SetItem) {
+    const total = set.cadets.length
+    const qualified = set.cadets.filter(c => 
+      c.history.find(h => h.setId === set.id)?.qualification === 'qualified'
+    ).length
+    return { qualified, total }
+  }
+
   // Form State
   const [isAddingSet, setIsAddingSet] = useState(false)
   const [isAddSetModalOpen, setIsAddSetModalOpen] = useState(false)
@@ -159,6 +167,7 @@ export default function SlotView() {
             (() => {
               const s = slotSets.find(set => set.id === focusedSetId)
               if (!s) return null
+              const stats = getSetStats(s)
               return (
                 <SetCard 
                   key={s.id} 
@@ -172,17 +181,19 @@ export default function SlotView() {
               )
             })()
           ) : (
-            slotSets.map(s => (
-              <SetCard 
-                key={s.id} 
-                set={s} 
-                onUpdateCadet={(cadet) => updateCadet(s.id, cadet)}
-                onEdit={() => setEditingSet(s)}
-                onDelete={() => deleteSet(s.id)}
-                isSummary={true}
-                onClick={() => setFocusedSetId(s.id)}
-              />
-            ))
+            slotSets.map(s => {
+              return (
+                <SetCard 
+                  key={s.id} 
+                  set={s} 
+                  onUpdateCadet={(cadet) => updateCadet(s.id, cadet)}
+                  onEdit={() => setEditingSet(s)}
+                  onDelete={() => deleteSet(s.id)}
+                  isSummary={true}
+                  onClick={() => setFocusedSetId(s.id)}
+                />
+              )
+            })
           )}
         </div>
       </section>
