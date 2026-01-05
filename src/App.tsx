@@ -13,6 +13,7 @@ export default function App() {
         <nav>
           <Link to="/">לוח משבצות</Link>
           <Link to="/resources">תמונת מצב</Link>
+          <Link to="/path-finder">Path Finder</Link>
         </nav>
       </header>
       <main className="view">
