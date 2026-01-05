@@ -254,6 +254,13 @@ input:focus, select:focus {
   gap: 2rem;
 }
 
+.card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
 .slot-card {
   background: var(--bg-surface);
   border: 1px solid var(--border);

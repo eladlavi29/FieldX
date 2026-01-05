@@ -180,9 +180,12 @@ export default function Dashboard() {
           <p style={{ color: 'var(--text-muted)', margin: 0 }}>ניהול משבצות ומקצים</p>
         </div>
         
-        <button onClick={() => setIsAddSlotModalOpen(true)} className="btn btn-primary">
-          + משבצת חדשה
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <Link to="/resources" className="btn btn-secondary">🗺️ תמונת מצב</Link>
+          <button onClick={() => setIsAddSlotModalOpen(true)} className="btn btn-primary">
+            + משבצת חדשה
+          </button>
+        </div>
       </div>
 
       <div className="slots-grid">

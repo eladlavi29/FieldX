@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react'
 import type { Battalion, SetRequirements, SetTemplate, TemplateDef, CustomFieldDef } from '../types'
-import { storage } from '../services/storage'
+import { storage, Location, SubLocation } from '../services/storage'
 
 interface AddSetModalProps {
   battalion: Battalion | undefined
   isLoading: boolean
   onClose: () => void
-  onAdd: (name: string, selection: Record<string, string[]>, requirements: SetRequirements) => void
+  onAdd: (name: string, selection: Record<string, string[]>, requirements: SetRequirements, subLocationId?: string) => void
 }
 
 export default function AddSetModal({ battalion, isLoading, onClose, onAdd }: AddSetModalProps) {
@@ -30,9 +30,15 @@ export default function AddSetModal({ battalion, isLoading, onClose, onAdd }: Ad
   const [availableTemplates, setAvailableTemplates] = useState<TemplateDef[]>([])
   const [newTemplateName, setNewTemplateName] = useState('')
   const [isSavingTemplate, setIsSavingTemplate] = useState(false)
+  
+  const [locations, setLocations] = useState<Location[]>([])
+  const [selectedSubLocationId, setSelectedSubLocationId] = useState<string>('')
+
+  const totalTeamsSelected = Object.values(selection).reduce((acc, teams) => acc + teams.length, 0)
 
   useEffect(() => {
     setAvailableTemplates(storage.getTemplates())
+    setLocations(storage.getLocations())
   }, [])
 
   function handleTemplateChange(t: SetTemplate) {
@@ -139,7 +145,7 @@ export default function AddSetModal({ battalion, isLoading, onClose, onAdd }: Ad
       minScore,
       checklistItems: checklistItems.length > 0 ? checklistItems : undefined,
       customFields: customFields.length > 0 ? customFields : undefined
-    })
+    }, selectedSubLocationId)
   }
 
   function addCustomField() {
@@ -157,7 +163,7 @@ export default function AddSetModal({ battalion, isLoading, onClose, onAdd }: Ad
     setNewFieldMax('')
   }
 
-  const totalTeamsSelected = Object.values(selection).reduce((acc, teams) => acc + teams.length, 0)
+  const isFormValid = name.trim().length > 0 && totalTeamsSelected > 0 && selectedSubLocationId !== ''
 
   return (
     <div className="modal-overlay">
@@ -169,7 +175,7 @@ export default function AddSetModal({ battalion, isLoading, onClose, onAdd }: Ad
         
         <form onSubmit={handleSubmit} className="modal-form">
           <div className="form-group">
-            <label>שם המקצה</label>
+            <label>שם המקצה <span style={{ color: '#ef4444' }}>*</span></label>
             <input 
               value={name} 
               onChange={e => setName(e.target.value)} 
@@ -254,10 +260,30 @@ export default function AddSetModal({ battalion, isLoading, onClose, onAdd }: Ad
             </div>
           )}
 
+          <div className="form-group">
+            <label>מיקום (מטווח) <span style={{ color: '#ef4444' }}>*</span></label>
+            <select 
+              value={selectedSubLocationId} 
+              onChange={e => setSelectedSubLocationId(e.target.value)}
+              style={{ width: '100%', padding: '0.5rem' }}
+            >
+              <option value="">-- בחר מיקום --</option>
+              {locations.map(loc => (
+                <optgroup key={loc.id} label={loc.name}>
+                  {loc.subLocations.map(sub => (
+                    <option key={sub.id} value={sub.id}>
+                      {sub.name} (קיבולת: {sub.capacity})
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </div>
+
           <div className="selection-area">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
               <label style={{ fontWeight: 600, fontSize: '0.9rem' }}>
-                בחירת צוותים משתתפים
+                בחירת צוותים משתתפים <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <button type="button" onClick={toggleAll} className="btn-link">
                 בחר/נקה הכל
@@ -297,7 +323,12 @@ export default function AddSetModal({ battalion, isLoading, onClose, onAdd }: Ad
           </div>
 
           <div className="modal-actions">
-            <button type="submit" className="btn btn-primary" disabled={isLoading || totalTeamsSelected === 0}>
+            <button 
+              type="submit" 
+              className="btn btn-primary" 
+              disabled={isLoading || !isFormValid}
+              style={{ opacity: (isLoading || !isFormValid) ? 0.5 : 1, cursor: (isLoading || !isFormValid) ? 'not-allowed' : 'pointer' }}
+            >
               {isLoading ? 'יוצר מקצה...' : `צור מקצה (${totalTeamsSelected} צוותים)`}
             </button>
           </div>

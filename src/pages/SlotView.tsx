@@ -44,7 +44,7 @@ export default function SlotView() {
   const slotSets = allSets.filter(s => s.slotId === id)
   const battalion = getBattalion(battalionId)
 
-  async function handleAddSet(name: string, selection: Record<string, string[]>, requirements: SetRequirements) {
+  async function handleAddSet(name: string, selection: Record<string, string[]>, requirements: SetRequirements, subLocationId?: string) {
     if (!id) return
     setIsAddingSet(true)
     
@@ -67,12 +67,46 @@ export default function SlotView() {
         }
       }
 
+      // Enforce Capacity
+      if (subLocationId) {
+        const locations = storage.getLocations()
+        const subLoc = locations.flatMap(l => l.subLocations).find(s => s.id === subLocationId)
+        
+        if (subLoc) {
+          // Calculate existing occupancy in this location during this slot's time
+          // We check all sets in the current slot (assuming they run in parallel)
+          // Ideally we should also check overlapping slots, but for now we enforce within the slot context
+          const currentSlotSets = allSets.filter(s => s.slotId === id && s.subLocationId === subLocationId)
+          const currentOccupancy = currentSlotSets.reduce((sum, s) => sum + s.cadets.length, 0)
+          
+          const totalProjected = currentOccupancy + newCadets.length
+
+          if (totalProjected > subLoc.capacity) {
+            const msg = `שגיאה: חריגה מקיבולת המטווח.
+
+המטווח: ${subLoc.name}
+קיבולת מקסימלית: ${subLoc.capacity}
+תפוסה נוכחית (במשבצת זו): ${currentOccupancy}
+דרישה למקצה זה: ${newCadets.length}
+סה"כ צפוי: ${totalProjected}
+
+לא ניתן ליצור את המקצה.`
+            
+            alert(msg)
+            setIsAddingSet(false)
+            return
+          }
+        }
+      }
+
       const newSet: SetItem = { 
         id: String(Date.now()), 
         slotId: id, 
         name: name.trim(), 
         cadets: newCadets,
-        requirements
+        requirements,
+        subLocationId, // Save the location
+        isFinished: false
       }
       
       const next = [newSet, ...allSets]
@@ -95,7 +129,7 @@ export default function SlotView() {
     if (focusedSetId === setId) setFocusedSetId(null)
   }
 
-  async function updateSet(id: string, name: string, requirements: SetRequirements, selection: Record<string, string[]>) {
+  async function updateSet(id: string, name: string, requirements: SetRequirements, selection: Record<string, string[]>, subLocationId?: string, isFinished?: boolean) {
     // Fetch cadets based on selection
     let newCadets: Cadet[] = []
     try {
@@ -115,7 +149,7 @@ export default function SlotView() {
 
     const next = allSets.map(s => 
       s.id === id 
-        ? { ...s, name, requirements, cadets: newCadets }
+        ? { ...s, name, requirements, cadets: newCadets, subLocationId, isFinished }
         : s
     )
     setAllSets(next)

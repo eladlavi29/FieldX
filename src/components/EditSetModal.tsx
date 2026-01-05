@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react'
 import type { SetItem, SetRequirements, SetTemplate, TemplateDef, Battalion, CustomFieldDef } from '../types'
-import { storage } from '../services/storage'
+import { storage, Location } from '../services/storage'
 
 interface EditSetModalProps {
   set: SetItem
   battalion: Battalion | undefined
   onClose: () => void
-  onSave: (id: string, name: string, requirements: SetRequirements, selection: Record<string, string[]>) => void
+  onSave: (id: string, name: string, requirements: SetRequirements, selection: Record<string, string[]>, subLocationId?: string, isFinished?: boolean) => void
 }
 
 export default function EditSetModal({ set, battalion, onClose, onSave }: EditSetModalProps) {
@@ -25,9 +25,14 @@ export default function EditSetModal({ set, battalion, onClose, onSave }: EditSe
 
   const [availableTemplates, setAvailableTemplates] = useState<TemplateDef[]>([])
   const [selection, setSelection] = useState<Record<string, string[]>>({})
+  
+  const [subLocationId, setSubLocationId] = useState<string>((set as any).subLocationId || '')
+  const [isFinished, setIsFinished] = useState<boolean>((set as any).isFinished || false)
+  const [locations, setLocations] = useState<Location[]>([])
 
   useEffect(() => {
     setAvailableTemplates(storage.getTemplates())
+    setLocations(storage.getLocations())
     
     // Initialize selection from existing cadets
     const initialSelection: Record<string, string[]> = {}
@@ -51,7 +56,7 @@ export default function EditSetModal({ set, battalion, onClose, onSave }: EditSe
       minScore,
       checklistItems: checklistItems.length > 0 ? checklistItems : undefined,
       customFields: customFields.length > 0 ? customFields : undefined
-    }, selection)
+    }, selection, subLocationId, isFinished)
   }
 
   function toggleTeam(companyName: string, team: string) {
@@ -213,6 +218,39 @@ export default function EditSetModal({ set, battalion, onClose, onSave }: EditSe
                 <button type="button" onClick={() => setChecklistItems([...checklistItems, ''])} className="btn-link-small" style={{ alignSelf: 'flex-start' }}>+ הוסף פריט</button>
               )}
             </div>
+          </div>
+
+          <div className="form-group">
+            <label>מיקום (מטווח)</label>
+            <select 
+              value={subLocationId} 
+              onChange={e => setSubLocationId(e.target.value)}
+              style={{ width: '100%', padding: '0.5rem' }}
+            >
+              <option value="">-- בחר מיקום --</option>
+              {locations.map(loc => (
+                <optgroup key={loc.id} label={loc.name}>
+                  {loc.subLocations.map(sub => (
+                    <option key={sub.id} value={sub.id}>
+                      {sub.name} (קיבולת: {sub.capacity})
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#f0fdf4', padding: '0.75rem', borderRadius: '6px', border: '1px solid #bbf7d0' }}>
+            <input 
+              type="checkbox" 
+              id="isFinished"
+              checked={isFinished} 
+              onChange={e => setIsFinished(e.target.checked)}
+              style={{ width: 'auto', margin: 0 }}
+            />
+            <label htmlFor="isFinished" style={{ margin: 0, fontWeight: 'bold', color: '#166534', cursor: 'pointer' }}>
+              סמן מקצה כהושלם (שחרר משאבים)
+            </label>
           </div>
 
           <div className="selection-area">

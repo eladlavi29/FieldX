@@ -5,7 +5,20 @@ const KEYS = {
   SETS: 'fieldx_sets',
   RESULTS: 'fieldx_results',
   TEMPLATES: 'fieldx_templates',
-  SLOT_TEMPLATES: 'fieldx_slot_templates'
+  SLOT_TEMPLATES: 'fieldx_slot_templates',
+  LOCATIONS: 'fieldx_locations'
+}
+
+export interface SubLocation {
+  id: string
+  name: string
+  capacity: number
+}
+
+export interface Location {
+  id: string
+  name: string
+  subLocations: SubLocation[]
 }
 
 const DEFAULT_TEMPLATES: TemplateDef[] = [
@@ -27,6 +40,26 @@ const DEFAULT_SLOT_TEMPLATES: SlotTemplateDef[] = [
     ]
   },
   { id: 'zeroing_day', name: 'יום איפוס', sets: [{ name: 'מטווח איפוס', templateId: 'zeroing' }] }
+]
+
+const DEFAULT_LOCATIONS: Location[] = [
+  {
+    id: 'area_a',
+    name: 'מתחם מטווחים א׳',
+    subLocations: [
+      { id: 'range_1', name: 'מטווח 1', capacity: 20 },
+      { id: 'range_2', name: 'מטווח 2', capacity: 20 },
+      { id: 'range_sniper', name: 'מטווח צלפים (בודד)', capacity: 1 }
+    ]
+  },
+  {
+    id: 'area_b',
+    name: 'מתחם מטווחים ב׳',
+    subLocations: [
+      { id: 'range_3', name: 'מטווח 3', capacity: 30 },
+      { id: 'range_4', name: 'מטווח 4', capacity: 30 }
+    ]
+  }
 ]
 
 export const storage = {
@@ -74,5 +107,14 @@ export const storage = {
   getSlotTemplates: (): SlotTemplateDef[] => {
     const stored = localStorage.getItem(KEYS.SLOT_TEMPLATES)
     return stored ? JSON.parse(stored) : DEFAULT_SLOT_TEMPLATES
+  },
+
+  getLocations: (): Location[] => {
+    const stored = localStorage.getItem(KEYS.LOCATIONS)
+    return stored ? JSON.parse(stored) : DEFAULT_LOCATIONS
+  },
+
+  saveLocations: (locations: Location[]) => {
+    localStorage.setItem(KEYS.LOCATIONS, JSON.stringify(locations))
   }
 }
