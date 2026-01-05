@@ -6,10 +6,11 @@ interface EditSetModalProps {
   set: SetItem
   battalion: Battalion | undefined
   onClose: () => void
-  onSave: (id: string, name: string, requirements: SetRequirements, selection: Record<string, string[]>, subLocationId?: string, isFinished?: boolean) => void
+  onSave: (id: string, name: string, requirements: SetRequirements, selection: Record<string, string[]>, subLocationIds: string[], teamLocations: Record<string, string>, isFinished?: boolean) => Promise<void> | void
+  slotLocationId?: string
 }
 
-export default function EditSetModal({ set, battalion, onClose, onSave }: EditSetModalProps) {
+export default function EditSetModal({ set, battalion, onClose, onSave, slotLocationId }: EditSetModalProps) {
   const [name, setName] = useState(set.name)
   const [template, setTemplate] = useState<SetTemplate>(set.requirements?.template ?? 'custom')
   const [minHits, setMinHits] = useState<number | undefined>(set.requirements?.minHits)
@@ -26,9 +27,9 @@ export default function EditSetModal({ set, battalion, onClose, onSave }: EditSe
   const [availableTemplates, setAvailableTemplates] = useState<TemplateDef[]>([])
   const [selection, setSelection] = useState<Record<string, string[]>>({})
   
-  const [subLocationId, setSubLocationId] = useState<string>((set as any).subLocationId || '')
-  const [isFinished, setIsFinished] = useState<boolean>((set as any).isFinished || false)
+  const [teamLocations, setTeamLocations] = useState<Record<string, string>>((set as any).teamLocations || {})
   const [locations, setLocations] = useState<Location[]>([])
+  const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
     setAvailableTemplates(storage.getTemplates())
@@ -47,16 +48,18 @@ export default function EditSetModal({ set, battalion, onClose, onSave }: EditSe
     setSelection(initialSelection)
   }, [])
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    onSave(set.id, name, { 
+    setIsSaving(true)
+    await onSave(set.id, name, { 
       template, 
       minHits, 
       maxGroupSize, 
       minScore,
       checklistItems: checklistItems.length > 0 ? checklistItems : undefined,
       customFields: customFields.length > 0 ? customFields : undefined
-    }, selection, subLocationId, isFinished)
+    }, selection, Object.values(teamLocations), teamLocations, (set as any).isFinished)
+    // Modal will be closed by parent
   }
 
   function toggleTeam(companyName: string, team: string) {
@@ -109,14 +112,18 @@ export default function EditSetModal({ set, battalion, onClose, onSave }: EditSe
     setNewFieldMax('')
   }
 
+  const filteredLocations = slotLocationId 
+    ? locations.filter(l => l.id === slotLocationId)
+    : locations
+
   return (
     <div className="modal-overlay">
-      <div className="modal-content">
+      <div className="modal-content" style={{ width: '90%', maxWidth: '1000px', maxHeight: '95vh', display: 'flex', flexDirection: 'column' }}>
         <div className="modal-header">
           <h3>עריכת מקצה</h3>
           <button className="close-btn" onClick={onClose}>×</button>
         </div>
-        <form onSubmit={handleSubmit} className="modal-form">
+        <form onSubmit={handleSubmit} className="modal-form" style={{ overflowY: 'auto', padding: '0 1rem' }}>
           <div className="form-group">
             <label>שם המקצה</label>
             <input value={name} onChange={e => setName(e.target.value)} required />
@@ -221,36 +228,35 @@ export default function EditSetModal({ set, battalion, onClose, onSave }: EditSe
           </div>
 
           <div className="form-group">
-            <label>מיקום (מטווח)</label>
-            <select 
-              value={subLocationId} 
-              onChange={e => setSubLocationId(e.target.value)}
-              style={{ width: '100%', padding: '0.5rem' }}
-            >
-              <option value="">-- בחר מיקום --</option>
-              {locations.map(loc => (
-                <optgroup key={loc.id} label={loc.name}>
-                  {loc.subLocations.map(sub => (
-                    <option key={sub.id} value={sub.id}>
-                      {sub.name} (קיבולת: {sub.capacity})
-                    </option>
-                  ))}
-                </optgroup>
+            <label>שיוך מיקומים לצוותים</label>
+            <div style={{ border: '1px solid #cbd5e1', borderRadius: '6px', padding: '0.75rem', background: '#f8fafc' }}>
+              {filteredLocations.length === 0 && <div style={{ color: '#94a3b8', fontStyle: 'italic', textAlign: 'center' }}>אין מיקומים זמינים</div>}
+              
+              {Object.entries(selection).map(([company, teams]) => (
+                teams.map(team => {
+                  const key = `${company}_${team}`
+                  return (
+                    <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem', background: 'white', padding: '0.5rem', borderRadius: '4px', border: '1px solid #e2e8f0' }}>
+                      <div style={{ fontWeight: 500, minWidth: '120px' }}>{company} - צוות {team}</div>
+                      <select 
+                        value={teamLocations[key] || ''} 
+                        onChange={e => setTeamLocations(prev => ({ ...prev, [key]: e.target.value }))}
+                        style={{ flex: 1, padding: '0.3rem' }}
+                      >
+                        <option value="">-- בחר מיקום --</option>
+                        {filteredLocations.map(loc => (
+                          <optgroup key={loc.id} label={loc.name}>
+                            {loc.subLocations.map(sub => (
+                              <option key={sub.id} value={sub.id}>{sub.name}</option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                    </div>
+                  )
+                })
               ))}
-            </select>
-          </div>
-
-          <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#f0fdf4', padding: '0.75rem', borderRadius: '6px', border: '1px solid #bbf7d0' }}>
-            <input 
-              type="checkbox" 
-              id="isFinished"
-              checked={isFinished} 
-              onChange={e => setIsFinished(e.target.checked)}
-              style={{ width: 'auto', margin: 0 }}
-            />
-            <label htmlFor="isFinished" style={{ margin: 0, fontWeight: 'bold', color: '#166534', cursor: 'pointer' }}>
-              סמן מקצה כהושלם (שחרר משאבים)
-            </label>
+            </div>
           </div>
 
           <div className="selection-area">
@@ -279,7 +285,7 @@ export default function EditSetModal({ set, battalion, onClose, onSave }: EditSe
           </div>
 
           <div className="modal-actions">
-            <button type="submit" className="btn btn-primary">שמור שינויים</button>
+            <button type="submit" className="btn btn-primary" disabled={isSaving}>{isSaving ? 'שומר...' : 'שמור שינויים'}</button>
             <button type="button" onClick={onClose} className="btn btn-secondary">ביטול</button>
           </div>
         </form>

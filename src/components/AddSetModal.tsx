@@ -6,10 +6,11 @@ interface AddSetModalProps {
   battalion: Battalion | undefined
   isLoading: boolean
   onClose: () => void
-  onAdd: (name: string, selection: Record<string, string[]>, requirements: SetRequirements, subLocationId?: string) => void
+  onAdd: (name: string, selection: Record<string, string[]>, requirements: SetRequirements, subLocationIds: string[], teamLocations: Record<string, string>) => void
+  slotLocationId?: string
 }
 
-export default function AddSetModal({ battalion, isLoading, onClose, onAdd }: AddSetModalProps) {
+export default function AddSetModal({ battalion, isLoading, onClose, onAdd, slotLocationId }: AddSetModalProps) {
   const [name, setName] = useState('')
   // Selection map: CompanyName -> Array of Team IDs
   const [selection, setSelection] = useState<Record<string, string[]>>({})
@@ -32,7 +33,7 @@ export default function AddSetModal({ battalion, isLoading, onClose, onAdd }: Ad
   const [isSavingTemplate, setIsSavingTemplate] = useState(false)
   
   const [locations, setLocations] = useState<Location[]>([])
-  const [selectedSubLocationId, setSelectedSubLocationId] = useState<string>('')
+  const [teamLocations, setTeamLocations] = useState<Record<string, string>>({})
 
   const totalTeamsSelected = Object.values(selection).reduce((acc, teams) => acc + teams.length, 0)
 
@@ -145,7 +146,7 @@ export default function AddSetModal({ battalion, isLoading, onClose, onAdd }: Ad
       minScore,
       checklistItems: checklistItems.length > 0 ? checklistItems : undefined,
       customFields: customFields.length > 0 ? customFields : undefined
-    }, selectedSubLocationId)
+    }, Object.values(teamLocations), teamLocations)
   }
 
   function addCustomField() {
@@ -163,17 +164,21 @@ export default function AddSetModal({ battalion, isLoading, onClose, onAdd }: Ad
     setNewFieldMax('')
   }
 
-  const isFormValid = name.trim().length > 0 && totalTeamsSelected > 0 && selectedSubLocationId !== ''
+  const isFormValid = name.trim().length > 0 && totalTeamsSelected > 0
+
+  const filteredLocations = slotLocationId 
+    ? locations.filter(l => l.id === slotLocationId)
+    : locations
 
   return (
     <div className="modal-overlay">
-      <div className="modal-content" style={{ maxWidth: '600px' }}>
+      <div className="modal-content" style={{ maxWidth: '600px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
         <div className="modal-header">
           <h3>הוספת מקצה חדש</h3>
           <button className="close-btn" onClick={onClose}>×</button>
         </div>
         
-        <form onSubmit={handleSubmit} className="modal-form">
+        <form onSubmit={handleSubmit} className="modal-form" style={{ overflowY: 'auto' }}>
           <div className="form-group">
             <label>שם המקצה <span style={{ color: '#ef4444' }}>*</span></label>
             <input 
@@ -261,23 +266,36 @@ export default function AddSetModal({ battalion, isLoading, onClose, onAdd }: Ad
           )}
 
           <div className="form-group">
-            <label>מיקום (מטווח) <span style={{ color: '#ef4444' }}>*</span></label>
-            <select 
-              value={selectedSubLocationId} 
-              onChange={e => setSelectedSubLocationId(e.target.value)}
-              style={{ width: '100%', padding: '0.5rem' }}
-            >
-              <option value="">-- בחר מיקום --</option>
-              {locations.map(loc => (
-                <optgroup key={loc.id} label={loc.name}>
-                  {loc.subLocations.map(sub => (
-                    <option key={sub.id} value={sub.id}>
-                      {sub.name} (קיבולת: {sub.capacity})
-                    </option>
-                  ))}
-                </optgroup>
+            <label>שיוך מיקומים לצוותים</label>
+            <div style={{ border: '1px solid #cbd5e1', borderRadius: '6px', padding: '0.75rem', maxHeight: '300px', overflowY: 'auto', background: '#f8fafc' }}>
+              {filteredLocations.length === 0 && <div style={{ color: '#94a3b8', fontStyle: 'italic', textAlign: 'center' }}>אין מיקומים זמינים</div>}
+              
+              {Object.entries(selection).map(([company, teams]) => (
+                teams.map(team => {
+                  const key = `${company}_${team}`
+                  return (
+                    <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem', background: 'white', padding: '0.5rem', borderRadius: '4px', border: '1px solid #e2e8f0' }}>
+                      <div style={{ fontWeight: 500, minWidth: '120px' }}>{company} - צוות {team}</div>
+                      <select 
+                        value={teamLocations[key] || ''} 
+                        onChange={e => setTeamLocations(prev => ({ ...prev, [key]: e.target.value }))}
+                        style={{ flex: 1, padding: '0.3rem' }}
+                      >
+                        <option value="">-- בחר מיקום --</option>
+                        {filteredLocations.map(loc => (
+                          <optgroup key={loc.id} label={loc.name}>
+                            {loc.subLocations.map(sub => (
+                              <option key={sub.id} value={sub.id}>{sub.name}</option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                    </div>
+                  )
+                })
               ))}
-            </select>
+              {totalTeamsSelected === 0 && <div style={{ color: '#94a3b8', textAlign: 'center' }}>נא לבחור צוותים תחילה</div>}
+            </div>
           </div>
 
           <div className="selection-area">

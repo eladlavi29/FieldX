@@ -13,63 +13,92 @@ export default function ResourcesDashboard() {
   
   // New Location Form State
   const [newLocName, setNewLocName] = useState('')
-  const [newSubLocs, setNewSubLocs] = useState<{id?: string, name: string, capacity: number}[]>([{name: '', capacity: 0}])
+  const [newSubLocs, setNewSubLocs] = useState<{id?: string, name: string}[]>([{name: ''}])
 
   useEffect(() => {
-    setLocations(storage.getLocations())
-    setSlots(storage.getSlots())
-    setSets(storage.getSets())
+    const fetchData = () => {
+      setLocations(storage.getLocations())
+      setSlots(storage.getSlots())
+      setSets(storage.getSets())
+    }
+
+    fetchData() // Initial fetch
 
     const timer = setInterval(() => setNow(new Date()), 60000)
-    return () => clearInterval(timer)
+    
+    window.addEventListener('focus', fetchData) // Refetch on tab focus
+
+    return () => {
+      clearInterval(timer)
+      window.removeEventListener('focus', fetchData)
+    }
   }, [])
 
-  // Helper to check if a set is currently active
-  function isSetActive(set: SetItem) {
-    if ((set as any).isFinished) return false
-    const slot = slots.find(s => s.id === set.slotId)
-    if (!slot || slot.isFinished) return false
-    
-    const start = new Date(`${slot.date}T${slot.startTime}`)
-    const end = slot.endTime ? new Date(`${slot.endDate || slot.date}T${slot.endTime}`) : null
-    
-    // Check if NOW is within the slot time (or after start if no end time defined)
-    if (now >= start && (!end || now <= end)) {
-      return true
-    }
-    return false
-  }
-
   function getSubLocationStatus(subLocationId: string) {
-    // Find all sets assigned to this location
-    const assignedSets = sets.filter(s => (s as any).subLocationId === subLocationId)
-    
-    // Find active ones
-    const activeSets = assignedSets.filter(isSetActive)
+    // 1. Find an active team in an active slot
+    for (const set of sets) {
+        const slot = slots.find(s => s.id === set.slotId);
+        if (!slot || slot.isFinished) continue;
 
-    if (activeSets.length === 0) return { status: 'free', text: 'פנוי', color: '#10b981' }
-    
-    // If occupied
-    const totalCadets = activeSets.reduce((sum, s) => sum + s.cadets.length, 0)
-    const setNames = activeSets.map(s => s.name).join(', ')
-    
-    // Find time range from the first active set's slot (approximation)
-    const firstSlot = slots.find(s => s.id === activeSets[0].slotId)
-    
-    return { 
-      status: 'occupied', 
-      text: `בשימוש: ${activeSets.length > 1 ? `${activeSets.length} מקצים` : setNames}`,
-      subText: firstSlot ? `${firstSlot.startTime} - ${firstSlot.endTime || '?'}` : '',
-      occupancy: `${totalCadets}`, // Just the number
-      color: '#ef4444' 
+        // Check if slot is active right now
+        const start = new Date(`${slot.date}T${slot.startTime}`);
+        const end = slot.endTime ? new Date(`${slot.endDate || slot.date}T${slot.endTime}`) : null;
+        if (isNaN(start.getTime())) continue;
+        const isSlotTimeActive = now >= start && (!end || now <= end);
+
+        if (isSlotTimeActive) {
+            const teamStatuses = (set as any).teamStatuses || {};
+            const teamLocations = (set as any).teamLocations || {};
+
+            for (const teamKey in teamStatuses) {
+                if (teamStatuses[teamKey] === 'active' && teamLocations[teamKey] === subLocationId) {
+                    // Found the occupying team
+                    const [company, team] = teamKey.split('_');
+                    const slotName = slot.name;
+                    const occupiedText = `תפוס ע"י: ${company} - צוות ${team} (${slotName})`;
+
+                    return { 
+                        status: 'occupied', 
+                        text: occupiedText,
+                        subText: `${slot.startTime} - ${slot.endTime || '?'}`,
+                        occupancy: '',
+                        color: '#ef4444' 
+                    };
+                }
+            }
+        }
     }
+
+    // 2. If not occupied, check if scheduled for today
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const scheduledSets = sets.filter(set => {
+        if ((set as any).isFinished) return false;
+        const slot = slots.find(s => s.id === set.slotId);
+        if (!slot || slot.isFinished || slot.date !== todayStr) return false;
+
+        const teamLocations = (set as any).teamLocations || {};
+        return Object.values(teamLocations).includes(subLocationId);
+    });
+
+    if (scheduledSets.length > 0) {
+      const setNames = scheduledSets.map(s => s.name).join(', ')
+      return {
+        status: 'scheduled',
+        text: `שמור להיום: ${scheduledSets.length > 1 ? `${scheduledSets.length} מקצים` : setNames}`,
+        subText: 'ממתין לשעה היעודה',
+        occupancy: '-',
+        color: '#eab308' // Yellow
+      }
+    }
+
+    return { status: 'free', text: 'פנוי', color: '#10b981' }
   }
 
   function handleAddSubLoc() {
-    setNewSubLocs([...newSubLocs, {name: '', capacity: 0}])
+    setNewSubLocs([...newSubLocs, {name: ''}])
   }
 
-  function handleSubLocChange(index: number, field: 'name' | 'capacity', value: string | number) {
+  function handleSubLocChange(index: number, field: 'name', value: string) {
     const updated = [...newSubLocs]
     updated[index] = { ...updated[index], [field]: value }
     setNewSubLocs(updated)
@@ -83,7 +112,7 @@ export default function ResourcesDashboard() {
     setEditingLocationId(location.id)
     setNewLocName(location.name)
     // Keep existing IDs to preserve links to sets
-    setNewSubLocs(location.subLocations.map(s => ({ id: s.id, name: s.name, capacity: s.capacity })))
+    setNewSubLocs(location.subLocations.map(s => ({ id: s.id, name: s.name })))
     setIsAdding(true)
   }
 
@@ -107,7 +136,7 @@ export default function ResourcesDashboard() {
             subLocations: validSubLocs.map((s, i) => ({
               id: s.id || `sub_${Date.now()}_${i}`, // Preserve ID if exists, else generate
               name: s.name.trim(),
-              capacity: Number(s.capacity)
+              capacity: 1
             }))
           }
         }
@@ -121,7 +150,7 @@ export default function ResourcesDashboard() {
         subLocations: validSubLocs.map((s, i) => ({
           id: `sub_${Date.now()}_${i}`,
           name: s.name.trim(),
-          capacity: Number(s.capacity)
+          capacity: 1
         }))
       }
       updatedLocations = [...locations, newLocation]
@@ -134,7 +163,7 @@ export default function ResourcesDashboard() {
     setIsAdding(false)
     setEditingLocationId(null)
     setNewLocName('')
-    setNewSubLocs([{name: '', capacity: 0}])
+    setNewSubLocs([{name: ''}])
   }
 
   function deleteLocation(id: string) {
@@ -180,13 +209,6 @@ export default function ResourcesDashboard() {
                     onChange={e => handleSubLocChange(idx, 'name', e.target.value)}
                     style={{ flex: 2 }}
                   />
-                  <input 
-                    type="number" 
-                    placeholder="קיבולת" 
-                    value={sub.capacity || ''} 
-                    onChange={e => handleSubLocChange(idx, 'capacity', Number(e.target.value))}
-                    style={{ flex: 1 }}
-                  />
                   <button onClick={() => removeSubLoc(idx)} className="btn-danger" style={{ padding: '0 0.5rem' }}>×</button>
                 </div>
               ))}
@@ -228,17 +250,15 @@ export default function ResourcesDashboard() {
                   }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
                       <span style={{ fontWeight: 600 }}>{sub.name}</span>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>עד {sub.capacity}</span>
                     </div>
                     
                     <div style={{ fontSize: '0.9rem', color: info.status === 'occupied' ? '#b91c1c' : '#047857', fontWeight: 500 }}>
                       {info.text}
                     </div>
                     
-                    {info.status === 'occupied' && (
+                    {(info.status === 'occupied' || info.status === 'scheduled') && (
                       <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
                         <div>🕒 {info.subText}</div>
-                        <div style={{ fontWeight: 'bold' }}>👥 {info.occupancy} / {sub.capacity} צוערים</div>
                       </div>
                     )}
                   </div>

@@ -82,6 +82,10 @@ export default function Dashboard() {
       endTime: slotData.endTime
     }
 
+    if (slotData.locationId) {
+      (newSlot as any).locationId = slotData.locationId
+    }
+
     let newSets: SetItem[] = []
 
     // Handle Slot Template

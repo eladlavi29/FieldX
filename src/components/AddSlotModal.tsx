@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import type { Battalion, SlotTemplateDef } from '../types'
-import { storage } from '../services/storage'
+import { storage, Location } from '../services/storage'
 import { externalService } from '../services/external'
 
 interface AddSlotModalProps {
@@ -18,10 +18,13 @@ export default function AddSlotModal({ onClose, onAdd }: AddSlotModalProps) {
   const [battalions, setBattalions] = useState<Battalion[]>([])
   const [slotTemplates, setSlotTemplates] = useState<SlotTemplateDef[]>([])
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('')
+  const [locationId, setLocationId] = useState('')
+  const [locations, setLocations] = useState<Location[]>([])
 
   useEffect(() => {
     externalService.getAllBattalions().then(setBattalions)
     setSlotTemplates(storage.getSlotTemplates())
+    setLocations(storage.getLocations())
   }, [])
 
   function handleSubmit(e: React.FormEvent) {
@@ -33,7 +36,8 @@ export default function AddSlotModal({ onClose, onAdd }: AddSlotModalProps) {
       startTime,
       endDate,
       endTime,
-      templateId: selectedTemplateId
+      templateId: selectedTemplateId,
+      locationId
     })
   }
 
@@ -56,6 +60,16 @@ export default function AddSlotModal({ onClose, onAdd }: AddSlotModalProps) {
               <option value="">משבצת ריקה</option>
               {slotTemplates.map(t => (
                 <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label>מיקום (מתחם) <span style={{ color: '#ef4444' }}>*</span></label>
+            <select value={locationId} onChange={e => setLocationId(e.target.value)} required>
+              <option value="">בחר מיקום...</option>
+              {locations.map(l => (
+                <option key={l.id} value={l.id}>{l.name}</option>
               ))}
             </select>
           </div>
