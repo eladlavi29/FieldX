@@ -105,7 +105,8 @@ export default function SlotView() {
         name: name.trim(), 
         cadets: newCadets,
         requirements,
-        subLocationId // Save the location
+        subLocationId, // Save the location
+        isFinished: false
       }
       
       const next = [newSet, ...allSets]
@@ -128,7 +129,7 @@ export default function SlotView() {
     if (focusedSetId === setId) setFocusedSetId(null)
   }
 
-  async function updateSet(id: string, name: string, requirements: SetRequirements, selection: Record<string, string[]>) {
+  async function updateSet(id: string, name: string, requirements: SetRequirements, selection: Record<string, string[]>, subLocationId?: string, isFinished?: boolean) {
     // Fetch cadets based on selection
     let newCadets: Cadet[] = []
     try {
@@ -148,7 +149,7 @@ export default function SlotView() {
 
     const next = allSets.map(s => 
       s.id === id 
-        ? { ...s, name, requirements, cadets: newCadets }
+        ? { ...s, name, requirements, cadets: newCadets, subLocationId, isFinished }
         : s
     )
     setAllSets(next)

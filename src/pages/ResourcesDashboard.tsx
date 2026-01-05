@@ -26,6 +26,7 @@ export default function ResourcesDashboard() {
 
   // Helper to check if a set is currently active
   function isSetActive(set: SetItem) {
+    if ((set as any).isFinished) return false
     const slot = slots.find(s => s.id === set.slotId)
     if (!slot || slot.isFinished) return false
     
