@@ -31,6 +31,8 @@ export default function AddSetModal({ battalion, isLoading, onClose, onAdd }: Ad
   const [newTemplateName, setNewTemplateName] = useState('')
   const [isSavingTemplate, setIsSavingTemplate] = useState(false)
 
+  const totalTeamsSelected = Object.values(selection).reduce((acc, teams) => acc + teams.length, 0)
+
   useEffect(() => {
     setAvailableTemplates(storage.getTemplates())
   }, [])
@@ -157,7 +159,7 @@ export default function AddSetModal({ battalion, isLoading, onClose, onAdd }: Ad
     setNewFieldMax('')
   }
 
-  const totalTeamsSelected = Object.values(selection).reduce((acc, teams) => acc + teams.length, 0)
+  const isFormValid = name.trim().length > 0 && totalTeamsSelected > 0
 
   return (
     <div className="modal-overlay">
@@ -169,7 +171,7 @@ export default function AddSetModal({ battalion, isLoading, onClose, onAdd }: Ad
         
         <form onSubmit={handleSubmit} className="modal-form">
           <div className="form-group">
-            <label>שם המקצה</label>
+            <label>שם המקצה <span style={{ color: '#ef4444' }}>*</span></label>
             <input 
               value={name} 
               onChange={e => setName(e.target.value)} 
@@ -257,7 +259,7 @@ export default function AddSetModal({ battalion, isLoading, onClose, onAdd }: Ad
           <div className="selection-area">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
               <label style={{ fontWeight: 600, fontSize: '0.9rem' }}>
-                בחירת צוותים משתתפים
+                בחירת צוותים משתתפים <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <button type="button" onClick={toggleAll} className="btn-link">
                 בחר/נקה הכל
@@ -297,7 +299,12 @@ export default function AddSetModal({ battalion, isLoading, onClose, onAdd }: Ad
           </div>
 
           <div className="modal-actions">
-            <button type="submit" className="btn btn-primary" disabled={isLoading || totalTeamsSelected === 0}>
+            <button 
+              type="submit" 
+              className="btn btn-primary" 
+              disabled={isLoading || !isFormValid}
+              style={{ opacity: (isLoading || !isFormValid) ? 0.5 : 1, cursor: (isLoading || !isFormValid) ? 'not-allowed' : 'pointer' }}
+            >
               {isLoading ? 'יוצר מקצה...' : `צור מקצה (${totalTeamsSelected} צוותים)`}
             </button>
           </div>
