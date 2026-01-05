@@ -406,6 +406,26 @@ input:focus, select:focus {
   box-shadow: var(--shadow-sm);
 }
 
+/* Path Finder specific styles */
+.pf-results ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.pf-result-item {
+  background: var(--bg-app);
+  border: 1px solid var(--border);
+  padding: 12px;
+  border-radius: 10px;
+}
+
+@media (max-width: 800px) {
+  .dashboard { padding: 1rem; }
+  .pf-results ol { gap: 6px; }
+}
+
 .set-content {
   padding: 1.5rem;
   max-height: 65vh;
