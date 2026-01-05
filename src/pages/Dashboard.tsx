@@ -1,0 +1,256 @@
+import React, { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
+import { storage } from '../services/storage'
+import { externalService } from '../services/external'
+import type { Slot, Battalion, SetItem, SetRequirements, Cadet } from '../types'
+import AddSlotModal from '../components/AddSlotModal'
+
+export default function Dashboard() {
+  const [slots, setSlots] = useState<Slot[]>(storage.getSlots())
+  const [sets, setSets] = useState<SetItem[]>(storage.getSets())
+  const [battalions, setBattalions] = useState<Battalion[]>([])
+  const [now, setNow] = useState(new Date())
+  const [isAddSlotModalOpen, setIsAddSlotModalOpen] = useState(false)
+
+  useEffect(() => {
+    externalService.getAllBattalions().then(data => {
+      setBattalions(data)
+    })
+
+    const timer = setInterval(() => setNow(new Date()), 60000) // Update every minute
+    return () => clearInterval(timer)
+  }, [])
+
+  const formatDate = (d: string) => {
+    return new Date(d).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })
+  }
+
+  // Calculate progress for a slot
+  function getSlotProgress(slotId: string) {
+    const slotSets = sets.filter(s => s.slotId === slotId)
+    if (slotSets.length === 0) return 0
+    
+    // Calculate average progress of all sets (treating each set as an equal unit)
+    const totalSetProgress = slotSets.reduce((acc, set) => acc + getSetProgress(set), 0)
+    return Math.round(totalSetProgress / slotSets.length)
+  }
+
+  function getSetProgress(set: SetItem) {
+    if (set.cadets.length === 0) return 0
+    const qualified = set.cadets.filter(c => 
+      c.history.find(h => h.setId === set.id)?.qualification === 'qualified'
+    ).length
+    return Math.round((qualified / set.cadets.length) * 100)
+  }
+
+  function getSlotStatus(slot: Slot) {
+    if (slot.isFinished) return 'finished'
+    
+    const start = new Date(`${slot.date}T${slot.startTime}`)
+    const end = slot.endTime ? new Date(`${slot.endDate || slot.date}T${slot.endTime}`) : null
+    
+    if (now < start) return 'pending'
+    if (end && now > end) return 'finished'
+    
+    return 'active'
+  }
+
+  const statusLabels: Record<string, string> = {
+    active: 'מתרחש כעת',
+    pending: 'טרם התחיל',
+    finished: 'הסתיים'
+  }
+
+  async function handleAddSlot(slotData: any) {
+    const newSlot: Slot = { 
+      id: String(Date.now()), 
+      name: slotData.name.trim(),
+      battalionId: slotData.battalionId,
+      date: slotData.date,
+      startTime: slotData.startTime,
+      endDate: slotData.endDate,
+      endTime: slotData.endTime
+    }
+
+    let newSets: SetItem[] = []
+
+    // Handle Slot Template
+    if (slotData.templateId) {
+      const slotTemplates = storage.getSlotTemplates()
+      const template = slotTemplates.find(t => t.id === slotData.templateId)
+      if (template) {
+        const setTemplates = storage.getTemplates()
+        
+        // If using a template (like Field Week), default to ALL cadets in the battalion
+        let allCadets: Cadet[] = []
+        const battalion = battalions.find(b => b.id === slotData.battalionId)
+        
+        if (battalion) {
+          try {
+            for (const comp of battalion.structure) {
+              for (const team of comp.teams) {
+                const teamCadets = await externalService.getCadetsByTeam(comp.companyName, String(team))
+                const mappedCadets = teamCadets.map(c => {
+                  const history = storage.getCadetHistory(c.id)
+                  return { ...c, history, company: comp.companyName, team: String(team) }
+                })
+                allCadets = [...allCadets, ...mappedCadets]
+              }
+            }
+          } catch (err) {
+            console.error("Failed to fetch default cadets for template", err)
+          }
+        }
+
+        newSets = template.sets.map((setDef, idx) => {
+          const setTmpl = setTemplates.find(t => t.id === setDef.templateId)
+          const requirements: SetRequirements | undefined = setTmpl ? {
+            template: setTmpl.id,
+            minHits: setTmpl.minHits,
+            maxGroupSize: setTmpl.maxGroupSize,
+            minScore: setTmpl.minScore,
+            checklistItems: setTmpl.checklistItems
+          } : undefined
+
+          return {
+            id: String(Date.now() + idx),
+            slotId: newSlot.id,
+            name: setDef.name,
+            cadets: allCadets, // Default to all cadets for templates
+            requirements
+          }
+        })
+      }
+    }
+    
+    const next = [newSlot, ...slots]
+    setSlots(next)
+    storage.saveSlots(next)
+    
+    if (newSets.length > 0) {
+      const updatedSets = [...sets, ...newSets]
+      setSets(updatedSets)
+      storage.saveSets(updatedSets)
+    }
+
+    setIsAddSlotModalOpen(false)
+  }
+
+  function deleteSlot(e: React.MouseEvent, id: string) {
+    e.preventDefault() // Prevent navigation
+    if (!window.confirm('האם אתה בטוח שברצונך למחוק משבצת זו?')) return
+    
+    const next = slots.filter(s => s.id !== id)
+    setSlots(next)
+    storage.saveSlots(next)
+  }
+
+  function toggleFinishSlot(e: React.MouseEvent, slot: Slot) {
+    e.preventDefault()
+    const next = slots.map(s => {
+      if (s.id === slot.id) {
+        return { ...s, isFinished: !s.isFinished }
+      }
+      return s
+    })
+    setSlots(next)
+    storage.saveSlots(next)
+  }
+
+  return (
+    <div className="dashboard">
+      <div className="dashboard-header">
+        <div>
+          <h2>משבצות אימון</h2>
+          <p style={{ color: 'var(--text-muted)', margin: 0 }}>ניהול משבצות ומקצים</p>
+        </div>
+        
+        <button onClick={() => setIsAddSlotModalOpen(true)} className="btn btn-primary">
+          + משבצת חדשה
+        </button>
+      </div>
+
+      <div className="slots-grid">
+        {slots.length === 0 && <div className="empty">אין משבצות כרגע — הוסף אחת</div>}
+        {slots.map(s => {
+          const status = getSlotStatus(s)
+          const slotSets = sets.filter(set => set.slotId === s.id)
+          return (
+            <Link key={s.id} to={`/slots/${s.id}`} className="slot-card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <div className="slot-name">{s.name}</div>
+                  <div className="slot-meta">
+                    <span>📅 {formatDate(s.date)}</span>
+                    <span>
+                      ⌚ {s.startTime} 
+                      {s.endTime ? ` - ${s.endTime} ${s.endDate && s.endDate !== s.date ? `(${formatDate(s.endDate)})` : ''}` : ''}
+                    </span>
+                    <span>🏢 {battalions.find(b => b.id === s.battalionId)?.name || 'גדוד לא ידוע'}</span>
+                  </div>
+                </div>
+                <span className={`status-badge ${status}`}>
+                  {statusLabels[status]}
+                </span>
+              </div>
+              
+              <div className="progress-container">
+                <div className="progress-label">
+                  <span>התקדמות הכשרה כללית</span>
+                  <span>{getSlotProgress(s.id)}%</span>
+                </div>
+                <div className="progress-bar-bg">
+                  <div 
+                    className="progress-bar-fill" 
+                    style={{ width: `${getSlotProgress(s.id)}%` }}
+                  ></div>
+                </div>
+              </div>
+
+              {slotSets.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
+                  {slotSets.map(set => (
+                    <div key={set.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', fontSize: '0.85rem' }}>
+                      <div style={{ width: '120px', flexShrink: 0, color: 'var(--text-secondary)' }}>{set.name}</div>
+                      <div style={{ flex: 1, height: '6px', background: 'var(--bg-app)', borderRadius: '99px', overflow: 'hidden' }}>
+                        <div 
+                          style={{ 
+                            width: `${getSetProgress(set)}%`, 
+                            height: '100%', 
+                            background: 'var(--primary)',
+                            opacity: 0.8 
+                          }}
+                        ></div>
+                      </div>
+                      <div style={{ width: '30px', textAlign: 'left', fontSize: '0.75rem' }}>{getSetProgress(set)}%</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="slot-actions">
+                <button 
+                  onClick={(e) => toggleFinishSlot(e, s)} 
+                  className="btn btn-secondary"
+                  style={{ fontSize: '0.85rem', padding: '0.4rem 0.8rem' }}
+                >
+                  {s.isFinished ? 'פתח מחדש' : 'סיים משבצת'}
+                </button>
+                <button onClick={(e) => deleteSlot(e, s.id)} className="btn btn-danger" style={{ fontSize: '0.85rem', padding: '0.4rem 0.8rem' }}>
+                  מחק
+                </button>
+              </div>
+            </Link>
+          )
+        })}
+      </div>
+
+      {isAddSlotModalOpen && (
+        <AddSlotModal 
+          onClose={() => setIsAddSlotModalOpen(false)} 
+          onAdd={handleAddSlot} 
+        />
+      )}
+    </div>
+  )
+}

@@ -1,0 +1,239 @@
+import React, { useState, useEffect } from 'react'
+import type { Battalion, SetRequirements, SetTemplate, TemplateDef } from '../types'
+import { storage } from '../services/storage'
+
+interface AddSetModalProps {
+  battalion: Battalion | undefined
+  isLoading: boolean
+  onClose: () => void
+  onAdd: (name: string, selection: Record<string, string[]>, requirements: SetRequirements) => void
+}
+
+export default function AddSetModal({ battalion, isLoading, onClose, onAdd }: AddSetModalProps) {
+  const [name, setName] = useState('')
+  // Selection map: CompanyName -> Array of Team IDs
+  const [selection, setSelection] = useState<Record<string, string[]>>({})
+  
+  // Requirements State
+  const [template, setTemplate] = useState<SetTemplate>('custom')
+  const [minHits, setMinHits] = useState<number | undefined>(6)
+  const [maxGroupSize, setMaxGroupSize] = useState<number | undefined>(5)
+  const [minScore, setMinScore] = useState<number | undefined>(undefined)
+  const [checklistItems, setChecklistItems] = useState<string[]>([])
+  
+  const [availableTemplates, setAvailableTemplates] = useState<TemplateDef[]>([])
+  const [newTemplateName, setNewTemplateName] = useState('')
+  const [isSavingTemplate, setIsSavingTemplate] = useState(false)
+
+  useEffect(() => {
+    setAvailableTemplates(storage.getTemplates())
+  }, [])
+
+  function handleTemplateChange(t: SetTemplate) {
+    setTemplate(t)
+    if (t === 'custom') return
+
+    const selected = availableTemplates.find(tmpl => tmpl.id === t)
+    if (selected) {
+      setMinHits(selected.minHits)
+      setMaxGroupSize(selected.maxGroupSize)
+      setMinScore(selected.minScore)
+      setChecklistItems(selected.checklistItems || [])
+    }
+  }
+
+  function saveAsTemplate() {
+    if (!newTemplateName.trim()) return
+    const newId = `custom_${Date.now()}`
+    const newTemplate: TemplateDef = {
+      id: newId,
+      name: newTemplateName.trim(),
+      minHits,
+      maxGroupSize,
+      minScore,
+      checklistItems: checklistItems.length > 0 ? checklistItems : undefined
+    }
+    const updated = [...availableTemplates, newTemplate]
+    setAvailableTemplates(updated)
+    storage.saveTemplates(updated)
+    setTemplate(newId)
+    setIsSavingTemplate(false)
+    setNewTemplateName('')
+  }
+
+  function toggleTeam(companyName: string, team: string) {
+    setSelection(prev => {
+      const currentTeams = prev[companyName] || []
+      const isSelected = currentTeams.includes(team)
+      
+      let newTeams
+      if (isSelected) {
+        newTeams = currentTeams.filter(t => t !== team)
+      } else {
+        newTeams = [...currentTeams, team]
+      }
+
+      // Clean up empty keys
+      if (newTeams.length === 0) {
+        const { [companyName]: _, ...rest } = prev
+        return rest
+      }
+
+      return { ...prev, [companyName]: newTeams }
+    })
+  }
+
+  function toggleCompany(companyName: string, teams: number[]) {
+    setSelection(prev => {
+      const currentSelected = prev[companyName] || []
+      const allSelected = teams.every(t => currentSelected.includes(String(t)))
+      
+      if (allSelected) {
+        // Deselect all
+        const { [companyName]: _, ...rest } = prev
+        return rest
+      } else {
+        // Select all
+        return { ...prev, [companyName]: teams.map(String) }
+      }
+    })
+  }
+
+  function toggleAll() {
+    if (!battalion) return
+    const allSelected = battalion.structure.every(c => 
+      c.teams.every(t => selection[c.companyName]?.includes(String(t)))
+    )
+
+    if (allSelected) {
+      setSelection({})
+    } else {
+      const newSelection: Record<string, string[]> = {}
+      battalion.structure.forEach(c => {
+        newSelection[c.companyName] = c.teams.map(String)
+      })
+      setSelection(newSelection)
+    }
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!name.trim()) return
+    onAdd(name, selection, { 
+      template,
+      minHits, 
+      maxGroupSize,
+      minScore,
+      checklistItems: checklistItems.length > 0 ? checklistItems : undefined
+    })
+  }
+
+  const totalTeamsSelected = Object.values(selection).reduce((acc, teams) => acc + teams.length, 0)
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-content" style={{ maxWidth: '600px' }}>
+        <div className="modal-header">
+          <h3>הוספת מקצה חדש</h3>
+          <button className="close-btn" onClick={onClose}>×</button>
+        </div>
+        
+        <form onSubmit={handleSubmit} className="modal-form">
+          <div className="form-group">
+            <label>שם המקצה</label>
+            <input 
+              value={name} 
+              onChange={e => setName(e.target.value)} 
+              placeholder="לדוגמה: מקצה א' - משולב" 
+              autoFocus
+              required 
+            />
+          </div>
+
+          <div className="form-group">
+            <label>סוג מקצה (תבנית)</label>
+            <select value={template} onChange={e => handleTemplateChange(e.target.value as SetTemplate)}>
+              <option value="custom">התאמה אישית</option>
+              {availableTemplates.map(t => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {(template === 'custom' || template === 'zeroing' || template === 'achievement') && (
+            <div className="form-row" style={{ display: 'flex', gap: '1rem' }}>
+              {(template === 'custom' || template === 'zeroing' || template === 'achievement') && (
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label>מינימום פגיעות</label>
+                  <input type="number" value={minHits ?? ''} onChange={e => setMinHits(e.target.value ? Number(e.target.value) : undefined)} min="0" placeholder="ללא" />
+                </div>
+              )}
+              
+              {(template === 'custom' || template === 'zeroing') && (
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label>מקבץ מקסימלי (ס"מ)</label>
+                  <input type="number" value={maxGroupSize ?? ''} onChange={e => setMaxGroupSize(e.target.value ? Number(e.target.value) : undefined)} min="0" placeholder="ללא" />
+                </div>
+              )}
+
+              {(template === 'custom' || template === 'achievement') && (
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label>מינימום ניקוד</label>
+                  <input type="number" value={minScore ?? ''} onChange={e => setMinScore(e.target.value ? Number(e.target.value) : undefined)} min="0" placeholder="ללא" />
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="selection-area">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <label style={{ fontWeight: 600, fontSize: '0.9rem' }}>
+                בחירת צוותים משתתפים
+              </label>
+              <button type="button" onClick={toggleAll} className="btn-link">
+                בחר/נקה הכל
+              </button>
+            </div>
+            
+            <div className="battalion-structure">
+              {battalion?.structure.map(company => (
+                <div key={company.companyName} className="company-block">
+                  <div className="company-header">
+                    <div className="company-title">{company.companyName}</div>
+                    <button 
+                      type="button" 
+                      className="btn-link-small"
+                      onClick={() => toggleCompany(company.companyName, company.teams)}
+                    >בחר פלוגה</button>
+                  </div>
+                  <div className="teams-list">
+                    {company.teams.map(team => {
+                      const teamStr = String(team)
+                      const isSelected = selection[company.companyName]?.includes(teamStr)
+                      return (
+                        <button
+                          key={team}
+                          type="button"
+                          className={`team-chip ${isSelected ? 'selected' : ''}`}
+                          onClick={() => toggleTeam(company.companyName, teamStr)}
+                        >
+                          צוות {team}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="modal-actions">
+            <button type="submit" className="btn btn-primary" disabled={isLoading || totalTeamsSelected === 0}>
+              {isLoading ? 'יוצר מקצה...' : `צור מקצה (${totalTeamsSelected} צוותים)`}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
